@@ -56,4 +56,50 @@ if (!text) return;
 }
 
 startBot();
+`
+```js
+const { default: makeWASocket, useMultiFileAuthState } = require('@adiwajshing/baileys');
+const P = require('pino');
+const fs = require('fs');
+const path = require('path');
+
+// Plugins path
+const pluginsPath = path.join(__dirname, 'plugins');
+
+// Load all plugin files dynamically
+function loadPlugins(sock) {
+    fs.readdirSync(pluginsPath).forEach(file => {
+        if (file.endsWith('.js')) {
+            const plugin = require(`./plugins/${file}`);
+            if (plugin.execute) {
+                sock.ev.on('messages.upsert', async ({ messages }) => {
+                    const msg = messages[0];
+                    if (!msg.message || msg.key.fromMe) return;
+                    const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+
+                    if (text && text.startsWith('.' + plugin.name)) {
+                        await plugin.execute(sock, msg);
+                    }
+                });
+            }
+        }
+    });
+}
+
+// Start bot
+async function startBot() {
+const { state, saveCreds } = await useMultiFileAuthState('./session');
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true,
+        logger: P({ level: 'silent' }),
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+    loadPlugins(sock);
+
+    console.log("✅ LOVELY-XMD bot started!");
+}
+
+startBot();
 ```
